@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Profesor - Quizzes CyR</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --bg: #0a0e1a; --card: #111827; --card-hover: #1a2332;
+  --accent: #00e5ff; --accent-glow: rgba(0,229,255,0.15);
+  --correct: #00e676; --correct-bg: rgba(0,230,118,0.12);
+  --wrong: #ff5252; --wrong-bg: rgba(255,82,82,0.12);
+  --text: #e8eaf6; --text-dim: #78849e; --border: #1e293b;
+  --option-bg: #161d2e; --warn: #ffab40;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+body::before {
+  content: ''; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
+  background: radial-gradient(ellipse at 30% 20%, rgba(0,229,255,0.04) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 80%, rgba(100,50,255,0.03) 0%, transparent 50%);
+  z-index: 0; pointer-events: none;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; position: relative; z-index: 1; }
+.header { text-align: center; padding: 32px 0 24px; }
+.header h1 {
+  font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), #7c4dff);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header p { color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+
+/* LOGIN */
+#loginScreen { max-width: 400px; margin: 80px auto; }
+.login-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 40px 32px; text-align: center;
+}
+.login-card h2 { font-family: 'Space Mono', monospace; font-size: 22px; margin-bottom: 24px; color: var(--accent); }
+.login-card input {
+  font-family: 'Outfit', sans-serif; font-size: 16px; padding: 12px 18px; width: 100%;
+  background: var(--option-bg); border: 2px solid var(--border); border-radius: 10px;
+  color: var(--text); outline: none; text-align: center;
+}
+.login-card input:focus { border-color: var(--accent); }
+.login-card .login-err { color: var(--wrong); font-size: 13px; margin-top: 8px; display: none; }
+.btn-primary {
+  display: inline-block; margin-top: 20px; padding: 14px 40px;
+  font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700;
+  color: var(--bg); background: linear-gradient(135deg, var(--accent), #7c4dff);
+  border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,229,255,0.25); }
+
+/* DASHBOARD */
+#dashboard { display: none; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.top-bar .logout { font-size: 13px; color: var(--text-dim); cursor: pointer; text-decoration: underline; }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center;
+}
+.stat-card .stat-value {
+  font-family: 'Space Mono', monospace; font-size: 32px; font-weight: 700; color: var(--accent);
+}
+.stat-card .stat-label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+/* TABS */
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab {
+  padding: 10px 20px; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
+  background: var(--option-bg); border: 2px solid transparent; border-radius: 10px;
+  color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+}
+.tab:hover { border-color: rgba(0,229,255,0.2); color: var(--text); }
+.tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+/* QUIZ PANEL */
+.quiz-panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; }
+.quiz-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.quiz-panel-header h3 { font-size: 18px; font-weight: 700; }
+.quiz-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.quiz-controls label { font-size: 13px; color: var(--text-dim); }
+.code-display {
+  font-family: 'Space Mono', monospace; font-size: 18px; color: var(--accent);
+  background: var(--option-bg); padding: 6px 16px; border-radius: 8px; letter-spacing: 4px;
+}
+.code-input {
+  font-family: 'Space Mono', monospace; font-size: 14px; padding: 6px 12px; width: 120px;
+  background: var(--option-bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--accent); text-transform: uppercase; letter-spacing: 3px; outline: none;
+}
+.code-input:focus { border-color: var(--accent); }
+.btn-sm {
+  padding: 6px 14px; font-size: 12px; font-weight: 600; border: none; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s; font-family: 'Outfit', sans-serif;
+}
+.btn-save { background: var(--accent); color: var(--bg); }
+.btn-save:hover { box-shadow: 0 4px 12px rgba(0,229,255,0.3); }
+.btn-danger { background: var(--wrong); color: #fff; }
+.btn-danger:hover { box-shadow: 0 4px 12px rgba(255,82,82,0.3); }
+.btn-export { background: var(--correct); color: var(--bg); }
+.btn-export:hover { box-shadow: 0 4px 12px rgba(0,230,118,0.3); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+/* TOGGLE */
+.toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--border); transition: 0.3s; border-radius: 24px;
+}
+.toggle .slider:before {
+  content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px;
+  background: var(--text-dim); transition: 0.3s; border-radius: 50%;
+}
+.toggle input:checked + .slider { background: var(--accent); }
+.toggle input:checked + .slider:before { transform: translateX(20px); background: var(--bg); }
+
+/* TABLE */
+.results-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+.results-table th {
+  font-family: 'Space Mono', monospace; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--text-dim); text-align: left; padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.results-table td { padding: 12px; font-size: 14px; border-bottom: 1px solid rgba(30,41,59,0.5); }
+.results-table tr:hover { background: rgba(0,229,255,0.03); }
+.pct-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 6px; font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+}
+.pct-high { background: var(--correct-bg); color: var(--correct); }
+.pct-mid { background: var(--accent-glow); color: var(--accent); }
+.pct-low { background: rgba(255,171,64,0.15); color: var(--warn); }
+.pct-fail { background: var(--wrong-bg); color: var(--wrong); }
+.no-results { text-align: center; color: var(--text-dim); padding: 40px; font-size: 15px; }
+.quiz-summary { display: flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap; }
+.quiz-summary .qs { font-size: 13px; color: var(--text-dim); }
+.quiz-summary .qs strong { color: var(--accent); font-family: 'Space Mono', monospace; }
+
+/* ADD QUIZ */
+.add-quiz-form {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px; margin-bottom: 20px;
+}
+.add-quiz-form h3 { font-size: 16px; margin-bottom: 16px; }
+.form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.form-row input {
+  font-family: 'Outfit', sans-serif; font-size: 14px; padding: 10px 14px; flex: 1; min-width: 180px;
+  background: var(--option-bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); outline: none;
+}
+.form-row input:focus { border-color: var(--accent); }
+
+/* CONFIRM MODAL */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 32px; max-width: 400px; width: 90%; text-align: center;
+}
+.modal h3 { color: var(--wrong); margin-bottom: 12px; }
+.modal p { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; }
+.modal .modal-btns { display: flex; gap: 12px; justify-content: center; }
+
+.hidden { display: none !important; }
+@media (max-width: 600px) {
+  .header h1 { font-size: 22px; }
+  .quiz-panel { padding: 20px 16px; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Dashboard Profesor</h1>
+    <p>Panel de control de Quizzes CyR</p>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="loginScreen">
+    <div class="login-card">
+      <h2>Acceso Profesor</h2>
+      <input type="password" id="teacherPass" placeholder="Contrasena del profesor" autocomplete="off">
+      <div class="login-err" id="loginErr">Contrasena incorrecta</div>
+      <br>
+      <button class="btn-primary" onclick="login()">Entrar</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard">
+    <div class="top-bar">
+      <div>
+        <span style="font-size:13px;color:var(--text-dim)">Conectado a Firebase</span>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--correct);margin-left:6px;vertical-align:middle"></span>
+      </div>
+      <span class="logout" onclick="logout()">Cerrar sesion</span>
+    </div>
+
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="stat-value" id="totalQuizzes">0</div><div class="stat-label">Quizzes</div></div>
+      <div class="stat-card"><div class="stat-value" id="totalStudents">0</div><div class="stat-label">Alumnos total</div></div>
+      <div class="stat-card"><div class="stat-value" id="avgScore">-</div><div class="stat-label">Media global</div></div>
+    </div>
+
+    <div class="tabs" id="tabsContainer"></div>
+    <div id="quizPanels"></div>
+
+    <!-- ADD QUIZ FORM -->
+    <div class="add-quiz-form">
+      <h3>Registrar nuevo quiz</h3>
+      <div class="form-row">
+        <input type="text" id="newQuizId" placeholder="ID del quiz (ej: quiz-redes-1)">
+        <input type="text" id="newQuizName" placeholder="Nombre visible (ej: Quiz Redes)">
+      </div>
+      <div class="form-row">
+        <input type="text" id="newQuizUrl" placeholder="URL GitHub Pages (ej: https://ffrumej917.github.io/quiz-redes-1/)">
+        <input type="text" id="newQuizCode" placeholder="Codigo acceso (ej: REDES01)" style="max-width:180px;text-transform:uppercase">
+      </div>
+      <button class="btn-primary" onclick="addQuiz()" style="margin-top:8px">Agregar quiz</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <h3 id="modalTitle">Confirmar</h3>
+    <p id="modalMsg">Esta accion no se puede deshacer.</p>
+    <div class="modal-btns">
+      <button class="btn-sm btn-outline" onclick="closeModal()">Cancelar</button>
+      <button class="btn-sm btn-danger" id="modalConfirmBtn" onclick="">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIREBASE_DB_URL = 'https://quizzes-cyr-default-rtdb.europe-west1.firebasedatabase.app';
+const TEACHER_PASS = 'profesor2024';
+
+firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
+const db = firebase.database();
+
+let quizzesData = {}, resultsData = {}, activeTab = null;
+
+// LOGIN
+function login() {
+  const pass = document.getElementById('teacherPass').value;
+  if (pass === TEACHER_PASS) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    sessionStorage.setItem('dashLoggedIn', '1');
+    initDashboard();
+  } else {
+    document.getElementById('loginErr').style.display = 'block';
+  }
+}
+function logout() {
+  sessionStorage.removeItem('dashLoggedIn');
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'block';
+  document.getElementById('teacherPass').value = '';
+}
+document.getElementById('teacherPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+if (sessionStorage.getItem('dashLoggedIn') === '1') {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  initDashboard();
+}
+
+function initDashboard() {
+  // Listen to quizzes config
+  db.ref('quizzes').on('value', snap => {
+    quizzesData = snap.val() || {};
+    renderTabs();
+    renderPanels();
+    updateStats();
+  });
+  // Listen to results
+  db.ref('results').on('value', snap => {
+    resultsData = snap.val() || {};
+    renderPanels();
+    updateStats();
+  });
+}
+
+function renderTabs() {
+  const container = document.getElementById('tabsContainer');
+  container.innerHTML = '';
+  const ids = Object.keys(quizzesData);
+  if (ids.length > 0 && (!activeTab || !quizzesData[activeTab])) activeTab = ids[0];
+  ids.forEach(id => {
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (id === activeTab ? ' active' : '');
+    tab.textContent = quizzesData[id].name || id;
+    tab.onclick = () => { activeTab = id; renderTabs(); renderPanels(); };
+    container.appendChild(tab);
+  });
+}
+
+function renderPanels() {
+  const container = document.getElementById('quizPanels');
+  container.innerHTML = '';
+  if (!activeTab || !quizzesData[activeTab]) {
+    container.innerHTML = '<div class="no-results">No hay quizzes configurados. Agrega uno abajo.</div>';
+    return;
+  }
+  const quiz = quizzesData[activeTab];
+  const results = resultsData[activeTab] || {};
+  const entries = Object.entries(results).map(([k, v]) => ({ id: k, ...v })).sort((a, b) => b.timestamp - a.timestamp);
+
+  let panel = document.createElement('div');
+  panel.className = 'quiz-panel';
+
+  // Header
+  let header = '<div class="quiz-panel-header">';
+  header += '<h3>' + (quiz.name || activeTab) + '</h3>';
+  header += '<div class="quiz-controls">';
+  header += '<label>Activo</label>';
+  header += '<label class="toggle"><input type="checkbox" ' + (quiz.active !== false ? 'checked' : '') + ' onchange="toggleActive(\'' + activeTab + '\', this.checked)"><span class="slider"></span></label>';
+  header += '</div></div>';
+
+  // Controls row
+  let controls = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">';
+  controls += '<label style="font-size:13px;color:var(--text-dim)">Codigo:</label>';
+  controls += '<input class="code-input" id="codeInput_' + activeTab + '" value="' + (quiz.code || '') + '">';
+  controls += '<button class="btn-sm btn-save" onclick="saveCode(\'' + activeTab + '\')">Guardar</button>';
+  controls += '<div style="flex:1"></div>';
+  if (quiz.url) controls += '<a href="' + quiz.url + '" target="_blank" class="btn-sm btn-outline" style="text-decoration:none">Abrir quiz</a>';
+  controls += '<button class="btn-sm btn-export" onclick="exportCSV(\'' + activeTab + '\')">CSV</button>';
+  controls += '<button class="btn-sm btn-danger" onclick="confirmReset(\'' + activeTab + '\')">Resetear</button>';
+  controls += '</div>';
+
+  // Summary
+  let summary = '<div class="quiz-summary">';
+  summary += '<div class="qs">Alumnos: <strong>' + entries.length + '</strong></div>';
+  if (entries.length > 0) {
+    const avg = Math.round(entries.reduce((s, e) => s + (e.pct || 0), 0) / entries.length);
+    const best = Math.max(...entries.map(e => e.pct || 0));
+    summary += '<div class="qs">Media: <strong>' + avg + '%</strong></div>';
+    summary += '<div class="qs">Mejor: <strong>' + best + '%</strong></div>';
+  }
+  summary += '</div>';
+
+  // Table
+  let table = '';
+  if (entries.length === 0) {
+    table = '<div class="no-results">Ningun alumno ha completado este quiz todavia.</div>';
+  } else {
+    table = '<table class="results-table"><thead><tr><th>#</th><th>Nombre</th><th>Puntuacion</th><th>%</th><th>Fecha / Hora</th></tr></thead><tbody>';
+    entries.forEach((e, i) => {
+      const pctClass = (e.pct || 0) >= 90 ? 'pct-high' : (e.pct || 0) >= 70 ? 'pct-mid' : (e.pct || 0) >= 50 ? 'pct-low' : 'pct-fail';
+      const date = new Date(e.timestamp);
+      const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      table += '<tr><td style="color:var(--text-dim)">' + (i + 1) + '</td>';
+      table += '<td><strong>' + (e.name || '-') + '</strong></td>';
+      table += '<td>' + (e.score || 0) + ' / ' + (e.total || '?') + '</td>';
+      table += '<td><span class="pct-badge ' + pctClass + '">' + (e.pct || 0) + '%</span></td>';
+      table += '<td style="color:var(--text-dim);font-size:13px">' + dateStr + '</td></tr>';
+    });
+    table += '</tbody></table>';
+  }
+
+  panel.innerHTML = header + controls + summary + table;
+  container.appendChild(panel);
+}
+
+function updateStats() {
+  const quizIds = Object.keys(quizzesData);
+  document.getElementById('totalQuizzes').textContent = quizIds.length;
+  let totalStudents = 0, totalPct = 0, totalCount = 0;
+  quizIds.forEach(id => {
+    const r = resultsData[id] || {};
+    const entries = Object.values(r);
+    totalStudents += entries.length;
+    entries.forEach(e => { totalPct += (e.pct || 0); totalCount++; });
+  });
+  document.getElementById('totalStudents').textContent = totalStudents;
+  document.getElementById('avgScore').textContent = totalCount > 0 ? Math.round(totalPct / totalCount) + '%' : '-';
+}
+
+function toggleActive(quizId, active) {
+  db.ref('quizzes/' + quizId + '/active').set(active);
+}
+
+function saveCode(quizId) {
+  const code = document.getElementById('codeInput_' + quizId).value.trim().toUpperCase();
+  if (!code) return;
+  db.ref('quizzes/' + quizId + '/code').set(code);
+}
+
+function exportCSV(quizId) {
+  const results = resultsData[quizId] || {};
+  const entries = Object.values(results).sort((a, b) => b.timestamp - a.timestamp);
+  if (entries.length === 0) { alert('No hay datos para exportar.'); return; }
+  let csv = 'Nombre,Puntuacion,Total,Porcentaje,Fecha\n';
+  entries.forEach(e => {
+    const date = new Date(e.timestamp).toLocaleString('es-ES');
+    csv += '"' + (e.name || '') + '",' + (e.score || 0) + ',' + (e.total || 0) + ',' + (e.pct || 0) + '%,"' + date + '"\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = quizId + '-resultados.csv';
+  a.click();
+}
+
+let pendingResetId = null;
+function confirmReset(quizId) {
+  pendingResetId = quizId;
+  document.getElementById('modalTitle').textContent = 'Resetear resultados';
+  document.getElementById('modalMsg').textContent = 'Se borraran TODOS los resultados de "' + (quizzesData[quizId]?.name || quizId) + '". Esta accion no se puede deshacer.';
+  document.getElementById('modalConfirmBtn').onclick = doReset;
+  document.getElementById('confirmModal').classList.add('show');
+}
+function doReset() {
+  if (pendingResetId) {
+    db.ref('results/' + pendingResetId).remove();
+    pendingResetId = null;
+  }
+  closeModal();
+}
+function closeModal() {
+  document.getElementById('confirmModal').classList.remove('show');
+}
+
+function addQuiz() {
+  const id = document.getElementById('newQuizId').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const name = document.getElementById('newQuizName').value.trim();
+  const url = document.getElementById('newQuizUrl').value.trim();
+  const code = document.getElementById('newQuizCode').value.trim().toUpperCase();
+  if (!id || !name) { alert('ID y nombre son obligatorios.'); return; }
+  db.ref('quizzes/' + id).set({
+    name: name,
+    url: url || '',
+    code: code || 'QUIZ' + Math.floor(Math.random() * 900 + 100),
+    active: true,
+    createdAt: Date.now()
+  }).then(() => {
+    document.getElementById('newQuizId').value = '';
+    document.getElementById('newQuizName').value = '';
+    document.getElementById('newQuizUrl').value = '';
+    document.getElementById('newQuizCode').value = '';
+    activeTab = id;
+  });
+}
+</script>
+</body>
+</html>
