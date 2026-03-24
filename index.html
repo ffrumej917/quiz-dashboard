@@ -339,6 +339,7 @@ function renderPanels() {
   if (quiz.url) controls += '<a href="' + quiz.url + '" target="_blank" class="btn-sm btn-outline" style="text-decoration:none">Abrir quiz</a>';
   controls += '<button class="btn-sm btn-export" onclick="exportCSV(\'' + activeTab + '\')">CSV</button>';
   controls += '<button class="btn-sm btn-danger" onclick="confirmReset(\'' + activeTab + '\')">Resetear</button>';
+  controls += '<button class="btn-sm btn-danger" style="background:#b71c1c" onclick="confirmDelete(\'' + activeTab + '\')">Eliminar quiz</button>';
   controls += '</div>';
 
   // Summary
@@ -426,6 +427,22 @@ function confirmReset(quizId) {
 function doReset() {
   if (pendingResetId) {
     db.ref('results/' + pendingResetId).remove();
+    pendingResetId = null;
+  }
+  closeModal();
+}
+function confirmDelete(quizId) {
+  pendingResetId = quizId;
+  document.getElementById('modalTitle').textContent = 'Eliminar quiz';
+  document.getElementById('modalMsg').textContent = 'Se eliminara el quiz "' + (quizzesData[quizId]?.name || quizId) + '" y TODOS sus resultados del dashboard. Esta accion no se puede deshacer.';
+  document.getElementById('modalConfirmBtn').onclick = doDelete;
+  document.getElementById('confirmModal').classList.add('show');
+}
+function doDelete() {
+  if (pendingResetId) {
+    db.ref('quizzes/' + pendingResetId).remove();
+    db.ref('results/' + pendingResetId).remove();
+    activeTab = null;
     pendingResetId = null;
   }
   closeModal();
